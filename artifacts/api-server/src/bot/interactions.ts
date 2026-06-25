@@ -10,11 +10,16 @@ import { logger } from "../lib/logger";
 import { ROLE_CATEGORIES, type CategoryKey } from "./config";
 import { buildRoleEmbed } from "./embeds";
 
+const AUTHORIZED_ROLE_ID = "1513128919182606378";
+
 async function handleSetup(interaction: ChatInputCommandInteraction) {
   const member = interaction.member as GuildMember;
-  if (!member.permissions.has(PermissionFlagsBits.ManageRoles)) {
+  const hasAuthorizedRole = member.roles.cache.has(AUTHORIZED_ROLE_ID);
+  const hasManageRoles = member.permissions.has(PermissionFlagsBits.ManageRoles);
+
+  if (!hasAuthorizedRole && !hasManageRoles) {
     await interaction.reply({
-      content: "❌ Bu komutu kullanmak için **Rolleri Yönet** yetkisine ihtiyacın var.",
+      content: "❌ Bu komutu kullanmak için yetkili role sahip olman gerekiyor.",
       ephemeral: true,
     });
     return;
