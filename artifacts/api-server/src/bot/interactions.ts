@@ -4,7 +4,6 @@ import {
   StringSelectMenuInteraction,
   GuildMember,
   PermissionFlagsBits,
-  TextChannel,
 } from "discord.js";
 import { logger } from "../lib/logger";
 import { ROLE_CATEGORIES, type CategoryKey } from "./config";
@@ -28,13 +27,7 @@ async function handleSetup(interaction: ChatInputCommandInteraction) {
   const category = interaction.options.getString("tür", true) as CategoryKey;
   const payload = buildRoleEmbed(category);
 
-  const channel = interaction.channel as TextChannel;
-  await channel.send(payload);
-
-  await interaction.reply({
-    content: `✅ **${ROLE_CATEGORIES[category].title}** embed'i bu kanala gönderildi!`,
-    ephemeral: true,
-  });
+  await interaction.reply(payload);
 }
 
 async function handleRoleSelect(interaction: StringSelectMenuInteraction) {

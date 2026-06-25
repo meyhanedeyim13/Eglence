@@ -27,6 +27,7 @@ export async function registerCommands(clientId: string, token: string) {
             { name: "💞 İlişki Durumu Rolleri", value: "iliski" },
             { name: "⚽ Takım Rolleri", value: "takim" },
             { name: "🎨 Renk Rolleri", value: "renk" },
+            { name: "🎟️ Katılım Rolleri", value: "katilim" },
           ),
       )
       .toJSON(),

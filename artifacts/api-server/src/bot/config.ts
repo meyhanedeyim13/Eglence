@@ -65,6 +65,17 @@ export const ROLE_CATEGORIES = {
       { label: "💙 Mavi", value: "Mavi", emoji: "💙" },
     ],
   },
+  katilim: {
+    title: "🎟️ Katılım Rolü Seç",
+    description: "Aşağıdan katılım türünü seçerek ilgili rolü alabilirsin.\nRolü tekrar seçersen kaldırılır.",
+    color: 0xf39c12 as number,
+    placeholder: "Katılım rolünü seç...",
+    roles: [
+      { label: "📺 D/C Katılımcısı", value: "D/C Katılımcısı", emoji: "📺" },
+      { label: "🎉 Çekiliş Katılımcısı", value: "Çekiliş Katılımcısı", emoji: "🎉" },
+      { label: "🎊 Etkinlik Katılımcısı", value: "Etkinlik Katılımcısı", emoji: "🎊" },
+    ],
+  },
 } as const;
 
 export type CategoryKey = keyof typeof ROLE_CATEGORIES;
