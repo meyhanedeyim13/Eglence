@@ -77,21 +77,6 @@ export const ROLE_CATEGORIES = {
       { label: "🎊 Etkinlik Katılımcısı", value: "Etkinlik Katılımcısı", emoji: "🎊" },
     ],
   },
-  hatirlatici: {
-    title: "🔔 Hatırlatıcı Rolü Seç",
-    description: "Aşağıdaki menüden almak istediğin hatırlatıcı rollerini seçebilirsin.\n**Birden fazla seçim yapabilirsin!** Seçimini kaldırmak için işaretini kaldır.",
-    color: 0xe67e22 as number,
-    placeholder: "Hatırlatıcı rol(ler)ini seç...",
-    multiSelect: true as const,
-    roles: [
-      { label: "📢 Duyuru", value: "Duyuru Hatırlatıcı", emoji: "📢" },
-      { label: "🎮 Oyun Etkinliği", value: "Oyun Etkinliği Hatırlatıcı", emoji: "🎮" },
-      { label: "🎬 Yayın", value: "Yayın Hatırlatıcı", emoji: "🎬" },
-      { label: "🎁 Çekiliş", value: "Çekiliş Hatırlatıcı", emoji: "🎁" },
-      { label: "🎊 Etkinlik", value: "Etkinlik Hatırlatıcı", emoji: "🎊" },
-      { label: "🤖 Bot Güncellemesi", value: "Bot Güncellemesi Hatırlatıcı", emoji: "🤖" },
-    ],
-  },
 } as const;
 
 export type CategoryKey = keyof typeof ROLE_CATEGORIES;

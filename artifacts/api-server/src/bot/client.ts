@@ -28,7 +28,6 @@ export async function registerCommands(clientId: string, token: string) {
             { name: "⚽ Takım Rolleri", value: "takim" },
             { name: "🎨 Renk Rolleri", value: "renk" },
             { name: "🎟️ Katılım Rolleri", value: "katilim" },
-            { name: "🔔 Hatırlatıcı Rolleri", value: "hatirlatici" },
           ),
       )
       .toJSON(),
