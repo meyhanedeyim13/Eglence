@@ -2,6 +2,7 @@ import {
   Interaction,
   ChatInputCommandInteraction,
   StringSelectMenuInteraction,
+  ButtonInteraction,
   GuildMember,
   PermissionFlagsBits,
 } from "discord.js";
@@ -111,21 +112,54 @@ async function handleRoleSelectMulti(interaction: StringSelectMenuInteraction) {
     }
   }
 
-  const added: string[] = [];
   for (const name of selectedRoleNames) {
     const role = guildRoles.find((r) => r.name === name);
     if (role && !member.roles.cache.has(role.id)) {
       await member.roles.add(role);
-      added.push(name);
     }
   }
 
   if (selectedRoleNames.length === 0) {
-    await interaction.editReply({ content: "✅ Tüm hatırlatıcı rollerin kaldırıldı." });
+    await interaction.editReply({ content: "✅ Bu kategorideki tüm rollerin kaldırıldı." });
   } else {
     await interaction.editReply({
-      content: `✅ Hatırlatıcı rollerin güncellendi:\n${selectedRoleNames.map((n) => `• **${n}**`).join("\n")}`,
+      content: `✅ Rollerin güncellendi:\n${selectedRoleNames.map((n) => `• **${n}**`).join("\n")}`,
     });
+  }
+}
+
+async function handleClearRoles(interaction: ButtonInteraction) {
+  await interaction.deferReply({ ephemeral: true });
+
+  const [, category] = interaction.customId.split(":") as [string, CategoryKey];
+  const cfg = ROLE_CATEGORIES[category];
+
+  const guild = interaction.guild;
+  if (!guild) {
+    await interaction.editReply({ content: "❌ Sunucu bulunamadı." });
+    return;
+  }
+
+  const member = interaction.member as GuildMember;
+  const allCategoryRoleNames = cfg.roles.map((r) => r.value);
+  const guildRoles = await guild.roles.fetch();
+
+  const categoryRoles = guildRoles.filter((r) =>
+    (allCategoryRoleNames as readonly string[]).includes(r.name),
+  );
+
+  let removed = 0;
+  for (const [, role] of categoryRoles) {
+    if (member.roles.cache.has(role.id)) {
+      await member.roles.remove(role);
+      removed++;
+    }
+  }
+
+  if (removed === 0) {
+    await interaction.editReply({ content: "ℹ️ Bu kategoride zaten hiç rolün yok." });
+  } else {
+    await interaction.editReply({ content: `🗑️ Bu kategorideki **${removed}** rol kaldırıldı.` });
   }
 }
 
@@ -146,6 +180,11 @@ export async function handleInteraction(interaction: Interaction) {
       } else {
         await handleRoleSelect(interaction);
       }
+      return;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith("clear_roles:")) {
+      await handleClearRoles(interaction);
       return;
     }
   } catch (err) {

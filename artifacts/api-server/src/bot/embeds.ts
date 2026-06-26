@@ -3,6 +3,8 @@ import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } from "discord.js";
 import { ROLE_CATEGORIES, isMultiSelect, type CategoryKey } from "./config";
 
@@ -33,7 +35,15 @@ export function buildRoleEmbed(category: CategoryKey) {
     menu.setMinValues(0).setMaxValues(options.length);
   }
 
-  const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
+  const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 
-  return { embeds: [embed], components: [row] };
+  const clearButton = new ButtonBuilder()
+    .setCustomId(`clear_roles:${category}`)
+    .setLabel("Seçimleri Temizle")
+    .setEmoji("🗑️")
+    .setStyle(ButtonStyle.Danger);
+
+  const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(clearButton);
+
+  return { embeds: [embed], components: [selectRow, buttonRow] };
 }
