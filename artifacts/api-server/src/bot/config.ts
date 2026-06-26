@@ -67,9 +67,10 @@ export const ROLE_CATEGORIES = {
   },
   katilim: {
     title: "🎟️ Katılım Rolü Seç",
-    description: "Aşağıdan katılım türünü seçerek ilgili rolü alabilirsin.\nRolü tekrar seçersen kaldırılır.",
+    description: "Aşağıdan almak istediğin katılım rollerini seçebilirsin.\n**Birden fazla seçim yapabilirsin!**",
     color: 0xf39c12 as number,
-    placeholder: "Katılım rolünü seç...",
+    placeholder: "Katılım rol(ler)ini seç...",
+    multiSelect: true as const,
     roles: [
       { label: "📺 D/C Katılımcısı", value: "D/C Katılımcısı", emoji: "📺" },
       { label: "🎉 Çekiliş Katılımcısı", value: "Çekiliş Katılımcısı", emoji: "🎉" },
