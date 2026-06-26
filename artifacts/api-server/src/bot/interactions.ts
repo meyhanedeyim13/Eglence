@@ -6,7 +6,7 @@ import {
   PermissionFlagsBits,
 } from "discord.js";
 import { logger } from "../lib/logger";
-import { ROLE_CATEGORIES, type CategoryKey } from "./config";
+import { ROLE_CATEGORIES, isMultiSelect, type CategoryKey } from "./config";
 import { buildRoleEmbed } from "./embeds";
 
 const AUTHORIZED_ROLE_ID = "1513128919182606378";
@@ -84,6 +84,51 @@ async function handleRoleSelect(interaction: StringSelectMenuInteraction) {
   }
 }
 
+async function handleRoleSelectMulti(interaction: StringSelectMenuInteraction) {
+  await interaction.deferReply({ ephemeral: true });
+
+  const [, category] = interaction.customId.split(":") as [string, CategoryKey];
+  const cfg = ROLE_CATEGORIES[category];
+  const selectedRoleNames = interaction.values;
+
+  const guild = interaction.guild;
+  if (!guild) {
+    await interaction.editReply({ content: "❌ Sunucu bulunamadı." });
+    return;
+  }
+
+  const member = interaction.member as GuildMember;
+  const allCategoryRoleNames = cfg.roles.map((r) => r.value);
+  const guildRoles = await guild.roles.fetch();
+
+  const categoryRoles = guildRoles.filter((r) =>
+    (allCategoryRoleNames as readonly string[]).includes(r.name),
+  );
+
+  for (const [, role] of categoryRoles) {
+    if (!selectedRoleNames.includes(role.name) && member.roles.cache.has(role.id)) {
+      await member.roles.remove(role);
+    }
+  }
+
+  const added: string[] = [];
+  for (const name of selectedRoleNames) {
+    const role = guildRoles.find((r) => r.name === name);
+    if (role && !member.roles.cache.has(role.id)) {
+      await member.roles.add(role);
+      added.push(name);
+    }
+  }
+
+  if (selectedRoleNames.length === 0) {
+    await interaction.editReply({ content: "✅ Tüm hatırlatıcı rollerin kaldırıldı." });
+  } else {
+    await interaction.editReply({
+      content: `✅ Hatırlatıcı rollerin güncellendi:\n${selectedRoleNames.map((n) => `• **${n}**`).join("\n")}`,
+    });
+  }
+}
+
 export async function handleInteraction(interaction: Interaction) {
   try {
     if (interaction.isChatInputCommand() && interaction.commandName === "setup") {
@@ -95,7 +140,12 @@ export async function handleInteraction(interaction: Interaction) {
       interaction.isStringSelectMenu() &&
       interaction.customId.startsWith("role_select:")
     ) {
-      await handleRoleSelect(interaction);
+      const [, category] = interaction.customId.split(":") as [string, CategoryKey];
+      if (isMultiSelect(category)) {
+        await handleRoleSelectMulti(interaction);
+      } else {
+        await handleRoleSelect(interaction);
+      }
       return;
     }
   } catch (err) {

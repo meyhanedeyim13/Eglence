@@ -4,10 +4,11 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from "discord.js";
-import { ROLE_CATEGORIES, type CategoryKey } from "./config";
+import { ROLE_CATEGORIES, isMultiSelect, type CategoryKey } from "./config";
 
 export function buildRoleEmbed(category: CategoryKey) {
   const cfg = ROLE_CATEGORIES[category];
+  const multi = isMultiSelect(category);
 
   const embed = new EmbedBuilder()
     .setTitle(cfg.title)
@@ -27,6 +28,10 @@ export function buildRoleEmbed(category: CategoryKey) {
     .setCustomId(`role_select:${category}`)
     .setPlaceholder(cfg.placeholder)
     .addOptions(options);
+
+  if (multi) {
+    menu.setMinValues(0).setMaxValues(options.length);
+  }
 
   const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 
