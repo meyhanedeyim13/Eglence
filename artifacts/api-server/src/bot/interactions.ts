@@ -9,6 +9,8 @@ import {
 import { logger } from "../lib/logger";
 import { ROLE_CATEGORIES, isMultiSelect, type CategoryKey } from "./config";
 import { buildRoleEmbed } from "./embeds";
+import { handleUnoCommand, handleUnoInteraction } from "./games/uno";
+import { handleVampirCommand, handleVampirInteraction } from "./games/vampir";
 
 const AUTHORIZED_ROLE_ID = "1513128919182606378";
 
@@ -27,7 +29,6 @@ async function handleSetup(interaction: ChatInputCommandInteraction) {
 
   const category = interaction.options.getString("tür", true) as CategoryKey;
   const payload = buildRoleEmbed(category);
-
   await interaction.reply(payload);
 }
 
@@ -39,13 +40,9 @@ async function handleRoleSelect(interaction: StringSelectMenuInteraction) {
   const selectedRoleName = interaction.values[0];
 
   const guild = interaction.guild;
-  if (!guild) {
-    await interaction.editReply({ content: "❌ Sunucu bulunamadı." });
-    return;
-  }
+  if (!guild) { await interaction.editReply({ content: "❌ Sunucu bulunamadı." }); return; }
 
   const member = interaction.member as GuildMember;
-
   const allCategoryRoleNames = cfg.roles.map((r) => r.value);
   const guildRoles = await guild.roles.fetch();
 
@@ -54,35 +51,22 @@ async function handleRoleSelect(interaction: StringSelectMenuInteraction) {
   );
 
   const selectedRole = guildRoles.find((r) => r.name === selectedRoleName);
-
   if (!selectedRole) {
-    await interaction.editReply({
-      content: `❌ **${selectedRoleName}** rolü sunucuda bulunamadı. Yöneticiye bildir.`,
-    });
+    await interaction.editReply({ content: `❌ **${selectedRoleName}** rolü sunucuda bulunamadı.` });
     return;
   }
 
   const alreadyHas = member.roles.cache.has(selectedRole.id);
-
-  const toRemove = categoryRoles.filter(
-    (r) => member.roles.cache.has(r.id) && r.id !== selectedRole.id,
-  );
-
-  for (const [, role] of toRemove) {
-    await member.roles.remove(role);
-  }
+  const toRemove = categoryRoles.filter((r) => member.roles.cache.has(r.id) && r.id !== selectedRole.id);
+  for (const [, role] of toRemove) await member.roles.remove(role);
 
   if (alreadyHas) {
     await member.roles.remove(selectedRole);
     await interaction.message.edit(buildRoleEmbed(category));
-    await interaction.editReply({
-      content: `✅ **${selectedRoleName}** rolü kaldırıldı.`,
-    });
+    await interaction.editReply({ content: `✅ **${selectedRoleName}** rolü kaldırıldı.` });
   } else {
     await member.roles.add(selectedRole);
-    await interaction.editReply({
-      content: `✅ **${selectedRoleName}** rolü verildi!`,
-    });
+    await interaction.editReply({ content: `✅ **${selectedRoleName}** rolü verildi!` });
   }
 }
 
@@ -94,15 +78,11 @@ async function handleRoleSelectMulti(interaction: StringSelectMenuInteraction) {
   const selectedRoleNames = interaction.values;
 
   const guild = interaction.guild;
-  if (!guild) {
-    await interaction.editReply({ content: "❌ Sunucu bulunamadı." });
-    return;
-  }
+  if (!guild) { await interaction.editReply({ content: "❌ Sunucu bulunamadı." }); return; }
 
   const member = interaction.member as GuildMember;
   const allCategoryRoleNames = cfg.roles.map((r) => r.value);
   const guildRoles = await guild.roles.fetch();
-
   const categoryRoles = guildRoles.filter((r) =>
     (allCategoryRoleNames as readonly string[]).includes(r.name),
   );
@@ -112,12 +92,9 @@ async function handleRoleSelectMulti(interaction: StringSelectMenuInteraction) {
       await member.roles.remove(role);
     }
   }
-
   for (const name of selectedRoleNames) {
     const role = guildRoles.find((r) => r.name === name);
-    if (role && !member.roles.cache.has(role.id)) {
-      await member.roles.add(role);
-    }
+    if (role && !member.roles.cache.has(role.id)) await member.roles.add(role);
   }
 
   if (selectedRoleNames.length === 0) {
@@ -136,15 +113,11 @@ async function handleClearRoles(interaction: ButtonInteraction) {
   const cfg = ROLE_CATEGORIES[category];
 
   const guild = interaction.guild;
-  if (!guild) {
-    await interaction.editReply({ content: "❌ Sunucu bulunamadı." });
-    return;
-  }
+  if (!guild) { await interaction.editReply({ content: "❌ Sunucu bulunamadı." }); return; }
 
   const member = interaction.member as GuildMember;
   const allCategoryRoleNames = cfg.roles.map((r) => r.value);
   const guildRoles = await guild.roles.fetch();
-
   const categoryRoles = guildRoles.filter((r) =>
     (allCategoryRoleNames as readonly string[]).includes(r.name),
   );
@@ -167,31 +140,36 @@ async function handleClearRoles(interaction: ButtonInteraction) {
 
 export async function handleInteraction(interaction: Interaction) {
   try {
-    if (interaction.isChatInputCommand() && interaction.commandName === "setup") {
-      await handleSetup(interaction);
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === "setup") { await handleSetup(interaction); return; }
+      if (interaction.commandName === "uno") { await handleUnoCommand(interaction); return; }
+      if (interaction.commandName === "vampir") { await handleVampirCommand(interaction); return; }
       return;
     }
 
-    if (
-      interaction.isStringSelectMenu() &&
-      interaction.customId.startsWith("role_select:")
-    ) {
-      const [, category] = interaction.customId.split(":") as [string, CategoryKey];
-      if (isMultiSelect(category)) {
-        await handleRoleSelectMulti(interaction);
-      } else {
-        await handleRoleSelect(interaction);
+    if (interaction.isButton() || interaction.isStringSelectMenu()) {
+      const id = interaction.customId;
+
+      if (id.startsWith("uno:")) { await handleUnoInteraction(interaction); return; }
+      if (id.startsWith("vampir:")) { await handleVampirInteraction(interaction); return; }
+
+      if (interaction.isStringSelectMenu() && id.startsWith("role_select:")) {
+        const [, category] = id.split(":") as [string, CategoryKey];
+        if (isMultiSelect(category)) {
+          await handleRoleSelectMulti(interaction);
+        } else {
+          await handleRoleSelect(interaction);
+        }
+        return;
       }
-      return;
-    }
 
-    if (interaction.isButton() && interaction.customId.startsWith("clear_roles:")) {
-      await handleClearRoles(interaction);
-      return;
+      if (interaction.isButton() && id.startsWith("clear_roles:")) {
+        await handleClearRoles(interaction);
+        return;
+      }
     }
   } catch (err) {
     logger.error({ err }, "Interaction handler hatası");
-
     const reply = { content: "❌ Bir hata oluştu. Lütfen tekrar dene.", ephemeral: true };
     if ("replied" in interaction && interaction.replied) return;
     if ("deferred" in interaction && interaction.deferred) {

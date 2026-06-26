@@ -1,6 +1,7 @@
 import {
   Client,
   GatewayIntentBits,
+  Partials,
   REST,
   Routes,
   SlashCommandBuilder,
@@ -9,7 +10,11 @@ import {
 import { logger } from "../lib/logger";
 
 export const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.DirectMessages,
+  ],
+  partials: [Partials.Channel],
 });
 
 export async function registerCommands(clientId: string, token: string) {
@@ -30,6 +35,16 @@ export async function registerCommands(clientId: string, token: string) {
             { name: "🎟️ Katılım Rolleri", value: "katilim" },
           ),
       )
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName("uno")
+      .setDescription("Bu kanalda yeni bir UNO oyunu başlat")
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName("vampir")
+      .setDescription("Bu kanalda yeni bir Vampir Köylü oyunu başlat")
       .toJSON(),
   ];
 
