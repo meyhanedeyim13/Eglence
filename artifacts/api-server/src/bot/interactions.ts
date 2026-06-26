@@ -74,6 +74,7 @@ async function handleRoleSelect(interaction: StringSelectMenuInteraction) {
 
   if (alreadyHas) {
     await member.roles.remove(selectedRole);
+    await interaction.message.edit(buildRoleEmbed(category));
     await interaction.editReply({
       content: `✅ **${selectedRoleName}** rolü kaldırıldı.`,
     });
@@ -159,6 +160,7 @@ async function handleClearRoles(interaction: ButtonInteraction) {
   if (removed === 0) {
     await interaction.editReply({ content: "ℹ️ Bu kategoride zaten hiç rolün yok." });
   } else {
+    await interaction.message.edit(buildRoleEmbed(category));
     await interaction.editReply({ content: `🗑️ Bu kategorideki **${removed}** rol kaldırıldı.` });
   }
 }
