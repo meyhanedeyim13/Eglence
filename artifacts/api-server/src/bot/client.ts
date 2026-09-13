@@ -46,6 +46,11 @@ export async function registerCommands(clientId: string, token: string) {
       .setName("vampir")
       .setDescription("Bu kanalda yeni bir Vampir Köylü oyunu başlat")
       .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName("kelime")
+      .setDescription("Bu kanalda Türkçe Kelime Türetme oyunu başlat")
+      .toJSON(),
   ];
 
   const rest = new REST().setToken(token);

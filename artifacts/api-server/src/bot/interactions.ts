@@ -11,6 +11,10 @@ import { ROLE_CATEGORIES, isMultiSelect, type CategoryKey } from "./config";
 import { buildRoleEmbed } from "./embeds";
 import { handleUnoCommand, handleUnoInteraction } from "./games/uno";
 import { handleVampirCommand, handleVampirInteraction } from "./games/vampir";
+import {
+  handleKelimeCommand,
+  handleKelimeInteraction,
+} from "./games/kelime";
 
 const AUTHORIZED_ROLE_ID = "1513128919182606378";
 
@@ -144,6 +148,7 @@ export async function handleInteraction(interaction: Interaction) {
       if (interaction.commandName === "setup") { await handleSetup(interaction); return; }
       if (interaction.commandName === "uno") { await handleUnoCommand(interaction); return; }
       if (interaction.commandName === "vampir") { await handleVampirCommand(interaction); return; }
+      if (interaction.commandName === "kelime") { await handleKelimeCommand(interaction); return; }
       return;
     }
 
@@ -167,6 +172,14 @@ export async function handleInteraction(interaction: Interaction) {
         await handleClearRoles(interaction);
         return;
       }
+    }
+
+    if (
+      interaction.isModalSubmit() &&
+      interaction.customId.startsWith("kelime:")
+    ) {
+      await handleKelimeInteraction(interaction);
+      return;
     }
   } catch (err) {
     logger.error({ err }, "Interaction handler hatası");
