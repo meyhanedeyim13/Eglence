@@ -17,6 +17,16 @@ function randomStarter(): string {
   );
 }
 
+function nextStarter(game: KelimeGame): string {
+  const unusedStarters = BASLANGIC_KELIMELERI.filter(
+    (word) => !game.usedWords.has(word),
+  );
+  return (
+    unusedStarters[Math.floor(Math.random() * unusedStarters.length)] ??
+    randomStarter()
+  );
+}
+
 export function getGame(channelId: string): KelimeGame | undefined {
   return games.get(channelId);
 }
@@ -48,7 +58,13 @@ function normalizeWord(rawWord: string): string {
 }
 
 export type SubmitWordResult =
-  | { ok: true; word: string; points: number; totalScore: number }
+  | {
+      ok: true;
+      word: string;
+      points: number;
+      totalScore: number;
+      continuationWord?: string;
+    }
   | { ok: false; reason: string };
 
 export function submitWord(
@@ -99,9 +115,22 @@ export function submitWord(
   player.username = username;
   player.score += points;
   game.players.set(userId, player);
-  game.currentWord = word;
   game.usedWords.add(word);
 
+  if (word.endsWith("ğ")) {
+    const continuationWord = nextStarter(game);
+    game.currentWord = continuationWord;
+    game.usedWords.add(continuationWord);
+    return {
+      ok: true,
+      word,
+      points,
+      totalScore: player.score,
+      continuationWord,
+    };
+  }
+
+  game.currentWord = word;
   return { ok: true, word, points, totalScore: player.score };
 }
 

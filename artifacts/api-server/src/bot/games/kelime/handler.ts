@@ -219,7 +219,11 @@ async function handleKelimeSubmit(
   }
 
   await interaction.reply({
-    content: `✅ **${result.word}** kabul edildi. +${result.points} puan! Toplam puanın: **${result.totalScore}**`,
+    content: result.continuationWord
+      ? `✅ **${result.word}** kabul edildi. +${result.points} puan! Toplam puanın: **${result.totalScore}**\n\n` +
+        `🔄 Kelime **Ğ** ile bittiği için yeni kelime verildi: **${result.continuationWord}**\n` +
+        `Sıradaki kelime **${result.continuationWord.at(-1)?.toLocaleUpperCase("tr-TR")}** harfiyle başlamalı.`
+      : `✅ **${result.word}** kabul edildi. +${result.points} puan! Toplam puanın: **${result.totalScore}**`,
     ephemeral: true,
   });
   await refreshGameMessage(interaction, interaction.channelId, game.lastMessageId);
