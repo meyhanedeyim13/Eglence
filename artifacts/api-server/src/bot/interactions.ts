@@ -13,6 +13,7 @@ import { handleUnoCommand, handleUnoInteraction } from "./games/uno";
 import { handleVampirCommand, handleVampirInteraction } from "./games/vampir";
 import {
   handleKelimeCommand,
+  handleKelimeSetupCommand,
   handleKelimeInteraction,
 } from "./games/kelime";
 
@@ -149,6 +150,7 @@ export async function handleInteraction(interaction: Interaction) {
       if (interaction.commandName === "uno") { await handleUnoCommand(interaction); return; }
       if (interaction.commandName === "vampir") { await handleVampirCommand(interaction); return; }
       if (interaction.commandName === "kelime") { await handleKelimeCommand(interaction); return; }
+      if (interaction.commandName === "kelime-kur") { await handleKelimeSetupCommand(interaction); return; }
       return;
     }
 

@@ -33,9 +33,10 @@ export async function handleVampirCommand(interaction: ChatInputCommandInteracti
   game.lastMessageId = msg.id;
 }
 
-async function sendNightDMs(interaction: ButtonInteraction | StringSelectMenuInteraction, channelId: string) {
+async function sendNightDMs(interaction: ButtonInteraction | StringSelectMenuInteraction, channelId: string): Promise<string[]> {
   const game = getGame(channelId);
-  if (!game) return;
+  if (!game) return [];
+  const failed: string[] = [];
 
   for (const player of alivePlayers(game)) {
     try {
@@ -59,9 +60,13 @@ async function sendNightDMs(interaction: ButtonInteraction | StringSelectMenuInt
       );
       await dm.send(buildNightActionEmbed(player.role, targets));
     } catch {
-      /* DM kapalı olabilir */
+      failed.push(player.username);
+      if (player.role !== "köylü") {
+        game.nightActions.actedUserIds.add(player.userId);
+      }
     }
   }
+  return failed;
 }
 
 async function checkAndResolveNight(interaction: ButtonInteraction | StringSelectMenuInteraction, channelId: string) {
@@ -107,6 +112,7 @@ async function checkAndResolveNight(interaction: ButtonInteraction | StringSelec
 }
 
 export async function handleVampirButton(interaction: ButtonInteraction) {
+  await interaction.deferReply({ ephemeral: true });
   const parts = interaction.customId.split(":");
   const action = parts[1]!;
   const channelId = interaction.channelId;
@@ -115,41 +121,48 @@ export async function handleVampirButton(interaction: ButtonInteraction) {
   const game = getGame(channelId);
 
   if (action === "join") {
-    if (!game) { await interaction.reply({ content: "❌ Oyun bulunamadı.", ephemeral: true }); return; }
+    if (!game) { await interaction.editReply("❌ Oyun bulunamadı."); return; }
     const result = joinGame(channelId, userId, username);
-    if (result === "already") { await interaction.reply({ content: "ℹ️ Zaten lobideydin.", ephemeral: true }); return; }
-    if (result === "full") { await interaction.reply({ content: "❌ Lobi dolu!", ephemeral: true }); return; }
-    if (result === "started") { await interaction.reply({ content: "❌ Oyun başladı.", ephemeral: true }); return; }
+    if (result === "already") { await interaction.editReply("ℹ️ Zaten lobideydin."); return; }
+    if (result === "full") { await interaction.editReply("❌ Lobi dolu!"); return; }
+    if (result === "started") { await interaction.editReply("❌ Oyun başladı."); return; }
     await interaction.message.edit(buildLobbyEmbed(game));
-    await interaction.reply({ content: "✅ Lobiye katıldın!", ephemeral: true });
+    await interaction.editReply("✅ Lobiye katıldın!");
     return;
   }
 
   if (action === "start") {
-    if (!game) { await interaction.reply({ content: "❌ Oyun bulunamadı.", ephemeral: true }); return; }
+    if (!game) { await interaction.editReply("❌ Oyun bulunamadı."); return; }
     const result = startGame(channelId, userId);
-    if (result === "not_host") { await interaction.reply({ content: "❌ Sadece lobi sahibi başlatabilir.", ephemeral: true }); return; }
-    if (result === "too_few") { await interaction.reply({ content: "❌ En az 4 oyuncu gerekli.", ephemeral: true }); return; }
-    await interaction.reply({ content: "🌙 Oyun başladı! DM'ini kontrol et.", ephemeral: true });
+    if (result === "not_host") { await interaction.editReply("❌ Sadece lobi sahibi başlatabilir."); return; }
+    if (result === "too_few") { await interaction.editReply("❌ En az 4 oyuncu gerekli."); return; }
+    if (result !== "ok") { await interaction.editReply("❌ Oyun bulunamadı."); return; }
     await interaction.message.edit(buildNightEmbed(game, undefined));
-    await sendNightDMs(interaction, channelId);
+    const failedDMs = await sendNightDMs(interaction, channelId);
+    await interaction.editReply(
+      failedDMs.length > 0
+        ? `🌙 Oyun başladı. DM'si kapalı olanlar: **${failedDMs.join(", ")}**. Bu kişilerin Discord'dan özel mesaj almayı açması gerekiyor.`
+        : "🌙 Oyun başladı! DM'ini kontrol et.",
+    );
+    await checkAndResolveNight(interaction, channelId);
     return;
   }
 
-  if (!game) { await interaction.reply({ content: "❌ Aktif oyun yok.", ephemeral: true }); return; }
+  if (!game) { await interaction.editReply("❌ Aktif oyun yok."); return; }
 
   if (action === "startvote") {
-    if (game.phase !== "day") { await interaction.reply({ content: "❌ Şu an oylama yapılamaz.", ephemeral: true }); return; }
+    if (game.phase !== "day") { await interaction.editReply("❌ Şu an oylama yapılamaz."); return; }
     game.phase = "voting";
     await interaction.message.edit(buildVotingEmbed(game));
-    await interaction.reply({ content: "🗳️ Oylama başladı!", ephemeral: true });
+    await interaction.editReply("🗳️ Oylama başladı!");
     return;
   }
 
-  await interaction.reply({ content: "❌ Bilinmeyen işlem.", ephemeral: true });
+  await interaction.editReply("❌ Bilinmeyen işlem.");
 }
 
 export async function handleVampirSelect(interaction: StringSelectMenuInteraction) {
+  await interaction.deferReply({ ephemeral: true });
   const parts = interaction.customId.split(":");
   const action = parts[1]!;
   const userId = interaction.user.id;
@@ -157,15 +170,15 @@ export async function handleVampirSelect(interaction: StringSelectMenuInteractio
   if (action === "vote") {
     const channelId = interaction.channelId;
     const game = getGame(channelId);
-    if (!game) { await interaction.reply({ content: "❌ Oyun bulunamadı.", ephemeral: true }); return; }
+    if (!game) { await interaction.editReply("❌ Oyun bulunamadı."); return; }
 
     const targetId = interaction.values[0]!;
     const result = castVote(game, userId, targetId);
-    if (result === "not_alive") { await interaction.reply({ content: "❌ Oyun dışındasın.", ephemeral: true }); return; }
-    if (result === "self") { await interaction.reply({ content: "❌ Kendine oy veremezsin.", ephemeral: true }); return; }
+    if (result === "not_alive") { await interaction.editReply("❌ Oyun dışındasın."); return; }
+    if (result === "self") { await interaction.editReply("❌ Kendine oy veremezsin."); return; }
 
     const target = game.players.find((p) => p.userId === targetId);
-    await interaction.reply({ content: `✅ **${target?.username}** için oy kullandın.`, ephemeral: true });
+    await interaction.editReply(`✅ **${target?.username}** için oy kullandın.`);
     await interaction.message.edit(buildVotingEmbed(game));
 
     if (game.votes.size >= alivePlayers(game).length) {
@@ -198,6 +211,7 @@ export async function handleVampirSelect(interaction: StringSelectMenuInteractio
       const edited = await interaction.message.edit(nightPayload);
       game.lastMessageId = edited.id;
       await sendNightDMs(interaction, channelId);
+      await checkAndResolveNight(interaction, channelId);
     }
     return;
   }
@@ -207,14 +221,14 @@ export async function handleVampirSelect(interaction: StringSelectMenuInteractio
     const targetId = interaction.values[0]!;
 
     const channelId = getChannelByPlayer(userId);
-    if (!channelId) { await interaction.reply({ content: "❌ Aktif oyun bulunamadı.", ephemeral: true }); return; }
+    if (!channelId) { await interaction.editReply("❌ Aktif oyun bulunamadı."); return; }
 
     const game = getGame(channelId);
-    if (!game || game.phase !== "night") { await interaction.reply({ content: "❌ Gece fazı değil.", ephemeral: true }); return; }
+    if (!game || game.phase !== "night") { await interaction.editReply("❌ Gece fazı değil."); return; }
 
     const player = game.players.find((p) => p.userId === userId);
-    if (!player || !player.alive || player.role !== role) { await interaction.reply({ content: "❌ Bu eylemi yapamazsın.", ephemeral: true }); return; }
-    if (game.nightActions.actedUserIds.has(userId)) { await interaction.reply({ content: "ℹ️ Bu gece zaten eylem yaptın.", ephemeral: true }); return; }
+    if (!player || !player.alive || player.role !== role) { await interaction.editReply("❌ Bu eylemi yapamazsın."); return; }
+    if (game.nightActions.actedUserIds.has(userId)) { await interaction.editReply("ℹ️ Bu gece zaten eylem yaptın."); return; }
 
     if (role === "vampir") game.nightActions.vampirTarget = targetId;
     if (role === "doktor") game.nightActions.doktorTarget = targetId;
@@ -224,19 +238,18 @@ export async function handleVampirSelect(interaction: StringSelectMenuInteractio
     const targetPlayer = game.players.find((p) => p.userId === targetId);
 
     if (role === "kahin") {
-      await interaction.reply({
-        content: `🔮 **${targetPlayer?.username}** — Rol: **${ROLE_EMOJIS[targetPlayer?.role ?? "köylü"]} ${targetPlayer?.role}**`,
-        ephemeral: true,
-      });
+      await interaction.editReply(
+        `🔮 **${targetPlayer?.username}** — Rol: **${ROLE_EMOJIS[targetPlayer?.role ?? "köylü"]} ${targetPlayer?.role}**`,
+      );
     } else {
-      await interaction.reply({ content: `✅ Seçimin: **${targetPlayer?.username}**`, ephemeral: true });
+      await interaction.editReply(`✅ Seçimin: **${targetPlayer?.username}**`);
     }
 
     await checkAndResolveNight(interaction, channelId);
     return;
   }
 
-  await interaction.reply({ content: "❌ Bilinmeyen işlem.", ephemeral: true });
+  await interaction.editReply("❌ Bilinmeyen işlem.");
 }
 
 export async function handleVampirInteraction(interaction: Interaction) {
@@ -248,9 +261,12 @@ export async function handleVampirInteraction(interaction: Interaction) {
     }
   } catch (err) {
     logger.error({ err }, "Vampir handler hatası");
-    if ("replied" in interaction && interaction.replied) return;
-    if ("reply" in interaction) {
-      await (interaction as ButtonInteraction).reply({ content: "❌ Bir hata oluştu.", ephemeral: true }).catch(() => null);
+    if (interaction.isRepliable()) {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: "❌ Bir hata oluştu." }).catch(() => null);
+      } else {
+        await interaction.reply({ content: "❌ Bir hata oluştu.", ephemeral: true }).catch(() => null);
+      }
     }
   }
 }

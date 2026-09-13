@@ -1,1 +1,5 @@
-export { handleKelimeCommand, handleKelimeInteraction } from "./handler";
+export {
+  handleKelimeCommand,
+  handleKelimeInteraction,
+  handleKelimeSetupCommand,
+} from "./handler";

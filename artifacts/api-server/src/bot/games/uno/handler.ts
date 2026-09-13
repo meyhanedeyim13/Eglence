@@ -1,241 +1,320 @@
 import {
   ActionRowBuilder,
   ButtonBuilder,
+  ButtonInteraction,
   ButtonStyle,
+  ChannelType,
+  StringSelectMenuInteraction,
+  TextChannel,
 } from "discord.js";
 import type {
-  ButtonInteraction,
-  StringSelectMenuInteraction,
   ChatInputCommandInteraction,
   Interaction,
 } from "discord.js";
 import { logger } from "../../../lib/logger";
 import {
-  createGame, getGame, joinGame, startGame, drawCard, playCard,
-  callUno, chooseColor, endGame, buildLobbyEmbed, buildGameEmbed,
-  buildHandEmbed, buildHandSelectMenu, currentPlayer,
+  buildGameEmbed,
+  buildHandEmbed,
+  buildHandSelectMenu,
+  buildLobbyEmbed,
+  callUno,
+  chooseColor,
+  createGame,
+  currentPlayer,
+  drawCard,
+  endGame,
+  getGame,
+  joinGame,
+  playCard,
+  startGame,
 } from "./game";
 import type { UnoColor } from "./types";
 
-export async function handleUnoCommand(interaction: ChatInputCommandInteraction) {
+export async function handleUnoCommand(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
   const channelId = interaction.channelId;
-  const userId = interaction.user.id;
-  const username = interaction.user.displayName;
-
-  const existing = getGame(channelId);
-  if (existing) {
-    await interaction.reply({ content: "❌ Bu kanalda zaten bir UNO oyunu var!", ephemeral: true });
+  if (getGame(channelId)) {
+    await interaction.reply({
+      content: "❌ Bu kanalda zaten bir UNO oyunu var!",
+      ephemeral: true,
+    });
     return;
   }
 
-  const game = createGame(channelId, userId, username);
-  const payload = buildLobbyEmbed(game);
-  const msg = await interaction.reply({ ...payload, fetchReply: true });
-  game.lastMessageId = msg.id;
+  const game = createGame(
+    channelId,
+    interaction.user.id,
+    interaction.user.displayName,
+  );
+  const message = await interaction.reply({
+    ...buildLobbyEmbed(game),
+    fetchReply: true,
+  });
+  game.lastMessageId = message.id;
 }
 
-async function refreshGameMessage(interaction: ButtonInteraction | StringSelectMenuInteraction) {
+async function getMainMessage(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+) {
   const game = getGame(interaction.channelId);
-  if (!game) return;
+  if (!game?.lastMessageId) return null;
+  if (interaction.channel?.type !== ChannelType.GuildText) return null;
+
+  return (interaction.channel as TextChannel).messages
+    .fetch(game.lastMessageId)
+    .catch(() => null);
+}
+
+async function refreshGameMessage(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+): Promise<void> {
+  const game = getGame(interaction.channelId);
+  const message = await getMainMessage(interaction);
+  if (!game || !message) return;
+
   if (game.phase === "playing" || game.phase === "choosingColor") {
-    const payload = buildGameEmbed(game);
-    await interaction.message.edit(payload);
+    await message.edit(buildGameEmbed(game));
   } else if (game.phase === "lobby") {
-    const payload = buildLobbyEmbed(game);
-    await interaction.message.edit(payload);
+    await message.edit(buildLobbyEmbed(game));
   }
 }
 
-export async function handleUnoButton(interaction: ButtonInteraction) {
+export async function handleUnoButton(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
   const [, action] = interaction.customId.split(":") as [string, string];
   const channelId = interaction.channelId;
   const userId = interaction.user.id;
-  const username = interaction.user.displayName;
-
   const game = getGame(channelId);
 
   if (action === "join") {
     if (!game) {
-      await interaction.reply({ content: "❌ Oyun bulunamadı.", ephemeral: true });
+      await interaction.editReply("❌ Oyun bulunamadı.");
       return;
     }
-    const result = joinGame(channelId, userId, username);
+    const result = joinGame(channelId, userId, interaction.user.displayName);
     if (result === "already") {
-      await interaction.reply({ content: "ℹ️ Zaten lobideydin.", ephemeral: true });
+      await interaction.editReply("ℹ️ Zaten lobidesin.");
     } else if (result === "full") {
-      await interaction.reply({ content: "❌ Lobi dolu!", ephemeral: true });
+      await interaction.editReply("❌ Lobi dolu.");
     } else if (result === "started") {
-      await interaction.reply({ content: "❌ Oyun başladı, artık katılamazsın.", ephemeral: true });
+      await interaction.editReply("❌ Oyun başladı, artık katılamazsın.");
     } else {
       await refreshGameMessage(interaction);
-      await interaction.reply({ content: "✅ Lobiye katıldın!", ephemeral: true });
+      await interaction.editReply("✅ Lobiye katıldın!");
     }
     return;
   }
 
   if (action === "start") {
     if (!game) {
-      await interaction.reply({ content: "❌ Oyun bulunamadı.", ephemeral: true });
+      await interaction.editReply("❌ Oyun bulunamadı.");
       return;
     }
     const result = startGame(channelId, userId);
     if (result === "not_host") {
-      await interaction.reply({ content: "❌ Oyunu sadece lobi sahibi başlatabilir.", ephemeral: true });
+      await interaction.editReply("❌ Oyunu sadece lobi sahibi başlatabilir.");
     } else if (result === "too_few") {
-      await interaction.reply({ content: "❌ En az 2 oyuncu gerekli.", ephemeral: true });
+      await interaction.editReply("❌ En az 2 oyuncu gerekli.");
+    } else if (result !== "ok") {
+      await interaction.editReply("❌ Oyun bulunamadı.");
     } else {
-      const payload = buildGameEmbed(game);
-      await interaction.message.edit(payload);
-      await interaction.reply({ content: "✅ UNO başladı! Elini görmek için **Elimi Gör** butonuna bas.", ephemeral: true });
+      await refreshGameMessage(interaction);
+      await interaction.editReply(
+        "✅ UNO başladı! Elini görmek için **Elimi Gör** butonuna bas.",
+      );
     }
     return;
   }
 
   if (!game) {
-    await interaction.reply({ content: "❌ Bu kanalda aktif oyun yok.", ephemeral: true });
+    await interaction.editReply("❌ Bu kanalda aktif oyun yok.");
     return;
   }
 
   if (action === "draw") {
     if (currentPlayer(game).userId !== userId) {
-      await interaction.reply({ content: "❌ Sıra sende değil.", ephemeral: true });
+      await interaction.editReply("❌ Sıra sende değil.");
       return;
     }
     const drawn = drawCard(channelId, userId);
     if (!drawn || drawn.length === 0) {
-      await interaction.reply({ content: "❌ Deste boş!", ephemeral: true });
+      await interaction.editReply("❌ Deste boş.");
       return;
     }
     await refreshGameMessage(interaction);
-    await interaction.reply({ content: `🂠 ${drawn.length} kart çektin.`, ephemeral: true });
+    await interaction.editReply(`🂠 ${drawn.length} kart çektin.`);
     return;
   }
 
   if (action === "hand") {
     const handEmbed = buildHandEmbed(game, userId);
     if (!handEmbed) {
-      await interaction.reply({ content: "❌ Bu oyunda değilsin.", ephemeral: true });
+      await interaction.editReply("❌ Bu oyunda değilsin.");
       return;
     }
-    const isTurn = currentPlayer(game).userId === userId && game.phase === "playing";
-    const components = isTurn ? (buildHandSelectMenu(game, userId) ? [buildHandSelectMenu(game, userId)!] : []) : [];
-    await interaction.reply({ embeds: [handEmbed], components, ephemeral: true });
+
+    const selectMenu =
+      currentPlayer(game).userId === userId && game.phase === "playing"
+        ? buildHandSelectMenu(game, userId)
+        : null;
+    await interaction.editReply({
+      embeds: [handEmbed],
+      components: selectMenu ? [selectMenu] : [],
+    });
     return;
   }
 
   if (action === "calluno") {
     const ok = callUno(channelId, userId);
-    if (ok) {
-      await interaction.reply({ content: "🚨 **UNO!** Son kartın var!", ephemeral: true });
-    } else {
-      await interaction.reply({ content: "❌ UNO diyebilmek için elinde tam 1 kart olmalı.", ephemeral: true });
-    }
+    await interaction.editReply(
+      ok
+        ? "🚨 **UNO!** Son kartın var!"
+        : "❌ UNO diyebilmek için elinde tam 1 kart olmalı.",
+    );
     return;
   }
 
-  await interaction.reply({ content: "❌ Bilinmeyen işlem.", ephemeral: true });
+  await interaction.editReply("❌ Bilinmeyen işlem.");
 }
 
-export async function handleUnoSelect(interaction: StringSelectMenuInteraction) {
+export async function handleUnoSelect(
+  interaction: StringSelectMenuInteraction,
+): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
   const [, action] = interaction.customId.split(":") as [string, string];
   const channelId = interaction.channelId;
   const userId = interaction.user.id;
   const game = getGame(channelId);
 
   if (!game) {
-    await interaction.reply({ content: "❌ Bu kanalda aktif oyun yok.", ephemeral: true });
+    await interaction.editReply("❌ Bu kanalda aktif oyun yok.");
     return;
   }
 
-  if (action === "play") {
-    const cardId = parseInt(interaction.values[0]!, 10);
-    const result = playCard(channelId, userId, cardId);
+  if (action !== "play") {
+    await interaction.editReply("❌ Bilinmeyen işlem.");
+    return;
+  }
 
-    if (!result.ok) {
-      await interaction.reply({ content: `❌ ${result.reason}`, ephemeral: true });
-      return;
-    }
+  const cardId = Number.parseInt(interaction.values[0]!, 10);
+  const result = playCard(channelId, userId, cardId);
+  if (!result.ok) {
+    await interaction.editReply(`❌ ${result.reason}`);
+    return;
+  }
 
-    if (result.won) {
-      await interaction.message.edit({
+  if (result.won) {
+    const message = await getMainMessage(interaction);
+    if (message) {
+      await message.edit({
         embeds: [
           {
-            title: "🎉 Oyun Bitti!",
+            title: "🎉 UNO Bitti!",
             description: `<@${userId}> kazandı! Tebrikler!`,
             color: 0x2ecc71,
           },
         ],
         components: [],
       });
-      endGame(channelId);
-      await interaction.reply({ content: "🎉 Kazandın!", ephemeral: true });
-      return;
     }
-
-    if (result.needColor) {
-      const colorRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId("uno:color:red").setLabel("🔴 Kırmızı").setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId("uno:color:green").setLabel("🟢 Yeşil").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("uno:color:blue").setLabel("🔵 Mavi").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("uno:color:yellow").setLabel("🟡 Sarı").setStyle(ButtonStyle.Secondary),
-      );
-      await interaction.reply({ content: "🌈 Wild oynadın! Renk seç:", components: [colorRow], ephemeral: true });
-      return;
-    }
-
-    await refreshGameMessage(interaction);
-    await interaction.reply({ content: "✅ Kart oynadın.", ephemeral: true });
+    endGame(channelId);
+    await interaction.editReply("🎉 Kazandın!");
     return;
   }
 
-  await interaction.reply({ content: "❌ Bilinmeyen işlem.", ephemeral: true });
+  if (result.needColor) {
+    const colorRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("uno:color:red")
+        .setLabel("🔴 Kırmızı")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId("uno:color:green")
+        .setLabel("🟢 Yeşil")
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId("uno:color:blue")
+        .setLabel("🔵 Mavi")
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId("uno:color:yellow")
+        .setLabel("🟡 Sarı")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.editReply({
+      content: "🌈 Wild oynadın! Renk seç:",
+      components: [colorRow],
+    });
+    return;
+  }
+
+  await refreshGameMessage(interaction);
+  await interaction.editReply("✅ Kart oynadın.");
 }
 
-export async function handleUnoColorButton(interaction: ButtonInteraction, color: UnoColor) {
+export async function handleUnoColorButton(
+  interaction: ButtonInteraction,
+  color: UnoColor,
+): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
   const channelId = interaction.channelId;
   const userId = interaction.user.id;
   const game = getGame(channelId);
 
   if (!game) {
-    await interaction.reply({ content: "❌ Oyun bulunamadı.", ephemeral: true });
+    await interaction.editReply("❌ Oyun bulunamadı.");
     return;
   }
 
-  const ok = chooseColor(channelId, userId, color);
-  if (!ok) {
-    await interaction.reply({ content: "❌ Renk seçme yetkisi sende değil.", ephemeral: true });
+  if (!chooseColor(channelId, userId, color)) {
+    await interaction.editReply("❌ Renk seçme yetkisi sende değil.");
     return;
   }
 
-  const mainMsg = await interaction.channel?.messages.fetch(game.lastMessageId ?? "").catch(() => null);
-  if (mainMsg) {
-    const payload = buildGameEmbed(game);
-    await mainMsg.edit(payload);
-  }
-
-  await interaction.reply({ content: `✅ Renk **${color}** seçildi!`, ephemeral: true });
+  await refreshGameMessage(interaction);
+  await interaction.editReply(`✅ Renk **${color}** seçildi!`);
 }
 
-export async function handleUnoInteraction(interaction: Interaction) {
+export async function handleUnoInteraction(
+  interaction: Interaction,
+): Promise<void> {
   try {
     if (interaction.isButton()) {
       const id = interaction.customId;
       if (id.startsWith("uno:color:")) {
-        const color = id.split(":")[2] as UnoColor;
-        await handleUnoColorButton(interaction, color);
+        await handleUnoColorButton(
+          interaction,
+          id.split(":")[2] as UnoColor,
+        );
       } else if (id.startsWith("uno:")) {
         await handleUnoButton(interaction);
       }
-    } else if (interaction.isStringSelectMenu() && interaction.customId.startsWith("uno:")) {
+      return;
+    }
+
+    if (
+      interaction.isStringSelectMenu() &&
+      interaction.customId.startsWith("uno:")
+    ) {
       await handleUnoSelect(interaction);
     }
   } catch (err) {
     logger.error({ err }, "UNO handler hatası");
-    if ("replied" in interaction && interaction.replied) return;
-    if ("deferred" in interaction && interaction.deferred) {
-      await (interaction as ButtonInteraction).editReply({ content: "❌ Bir hata oluştu." });
-    } else if ("reply" in interaction) {
-      await (interaction as ButtonInteraction).reply({ content: "❌ Bir hata oluştu.", ephemeral: true });
+    if (interaction.isRepliable()) {
+      if (interaction.deferred || interaction.replied) {
+        await interaction
+          .editReply({ content: "❌ Bir hata oluştu." })
+          .catch(() => null);
+      } else {
+        await interaction
+          .reply({ content: "❌ Bir hata oluştu.", ephemeral: true })
+          .catch(() => null);
+      }
     }
   }
 }

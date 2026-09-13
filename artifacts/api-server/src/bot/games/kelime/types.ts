@@ -1,5 +1,3 @@
-export type KelimePhase = "lobby" | "playing" | "finished";
-
 export interface KelimePlayer {
   userId: string;
   username: string;
@@ -7,13 +5,11 @@ export interface KelimePlayer {
 }
 
 export interface KelimeGame {
+  guildId: string;
   channelId: string;
-  hostId: string;
-  players: KelimePlayer[];
-  phase: KelimePhase;
-  currentPlayerIndex: number;
+  configuredBy: string;
   currentWord: string;
   usedWords: Set<string>;
-  winner?: string;
+  players: Map<string, KelimePlayer>;
   lastMessageId?: string;
 }

@@ -57,8 +57,10 @@ export function startGame(channelId: string, userId: string): "ok" | "not_host" 
   let topCard: UnoCard;
   do {
     topCard = game.deck.shift()!;
-    if (topCard.color === "wild") game.deck.push(topCard);
-  } while (topCard.color === "wild");
+    if (topCard.color === "wild" || !/^\d$/.test(topCard.value)) {
+      game.deck.push(topCard);
+    }
+  } while (topCard.color === "wild" || !/^\d$/.test(topCard.value));
 
   game.discardPile = [topCard];
   game.currentColor = topCard.color as UnoColor;
@@ -74,8 +76,9 @@ function drawFromDeck(game: UnoGame, count: number): UnoCard[] {
   const drawn: UnoCard[] = [];
   for (let i = 0; i < count; i++) {
     if (game.deck.length === 0) {
+      if (game.discardPile.length <= 1) break;
       const top = game.discardPile.pop()!;
-      game.deck = game.discardPile.sort(() => Math.random() - 0.5);
+      game.deck = [...game.discardPile].sort(() => Math.random() - 0.5);
       game.discardPile = [top];
     }
     if (game.deck.length > 0) drawn.push(game.deck.shift()!);
@@ -113,6 +116,7 @@ export function playCard(channelId: string, userId: string, cardId: number): Pla
   if (player.hand.length === 2 && !player.calledUno) {
     const drawn = drawFromDeck(game, 2);
     player.hand.push(...drawn);
+    nextTurn(game);
     return { ok: false, reason: "UNO demeden kart oynadın! 2 kart çektin." };
   }
 
@@ -197,7 +201,7 @@ export function drawCard(channelId: string, userId: string): UnoCard[] | null {
 
 export function callUno(channelId: string, userId: string): boolean {
   const game = games.get(channelId);
-  if (!game) return false;
+  if (!game || game.phase !== "playing") return false;
   const player = game.players.find((p) => p.userId === userId);
   if (!player || player.hand.length !== 1) return false;
   player.calledUno = true;

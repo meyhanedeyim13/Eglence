@@ -8,69 +8,39 @@ import {
 } from "discord.js";
 
 const games = new Map<string, KelimeGame>();
-const MAX_PLAYERS = 10;
-const TARGET_SCORE = 30;
+
+function randomStarter(): string {
+  return (
+    BASLANGIC_KELIMELERI[
+      Math.floor(Math.random() * BASLANGIC_KELIMELERI.length)
+    ] ?? "masa"
+  );
+}
 
 export function getGame(channelId: string): KelimeGame | undefined {
   return games.get(channelId);
 }
 
 export function createGame(
+  guildId: string,
   channelId: string,
-  hostId: string,
-  hostUsername: string,
+  configuredBy: string,
 ): KelimeGame {
   const game: KelimeGame = {
+    guildId,
     channelId,
-    hostId,
-    players: [{ userId: hostId, username: hostUsername, score: 0 }],
-    phase: "lobby",
-    currentPlayerIndex: 0,
-    currentWord: "",
+    configuredBy,
+    currentWord: randomStarter(),
     usedWords: new Set(),
+    players: new Map(),
   };
+  game.usedWords.add(game.currentWord);
   games.set(channelId, game);
   return game;
 }
 
-export function joinGame(
-  channelId: string,
-  userId: string,
-  username: string,
-): "ok" | "no_game" | "already" | "full" | "started" {
-  const game = games.get(channelId);
-  if (!game) return "no_game";
-  if (game.phase !== "lobby") return "started";
-  if (game.players.some((player) => player.userId === userId)) return "already";
-  if (game.players.length >= MAX_PLAYERS) return "full";
-
-  game.players.push({ userId, username, score: 0 });
-  return "ok";
-}
-
-export function startGame(
-  channelId: string,
-  userId: string,
-): "ok" | "no_game" | "not_host" | "too_few" {
-  const game = games.get(channelId);
-  if (!game) return "no_game";
-  if (game.hostId !== userId) return "not_host";
-  if (game.players.length < 2) return "too_few";
-
-  const starter =
-    BASLANGIC_KELIMELERI[
-      Math.floor(Math.random() * BASLANGIC_KELIMELERI.length)
-    ] ?? "masa";
-
-  game.currentWord = starter;
-  game.usedWords = new Set([starter]);
-  game.currentPlayerIndex = 0;
-  game.phase = "playing";
-  return "ok";
-}
-
-export function currentPlayer(game: KelimeGame): KelimePlayer {
-  return game.players[game.currentPlayerIndex]!;
+export function endGame(channelId: string): void {
+  games.delete(channelId);
 }
 
 function normalizeWord(rawWord: string): string {
@@ -78,31 +48,18 @@ function normalizeWord(rawWord: string): string {
 }
 
 export type SubmitWordResult =
-  | {
-      ok: true;
-      word: string;
-      points: number;
-      nextPlayer?: string;
-      winner?: string;
-    }
+  | { ok: true; word: string; points: number; totalScore: number }
   | { ok: false; reason: string };
 
 export function submitWord(
   channelId: string,
   userId: string,
+  username: string,
   rawWord: string,
 ): SubmitWordResult {
   const game = games.get(channelId);
-  if (!game || game.phase !== "playing") {
+  if (!game) {
     return { ok: false, reason: "Bu kanalda aktif bir kelime oyunu yok." };
-  }
-
-  const player = currentPlayer(game);
-  if (player.userId !== userId) {
-    return {
-      ok: false,
-      reason: `Şu an sıra **${player.username}** kullanıcısında.`,
-    };
   }
 
   const word = normalizeWord(rawWord);
@@ -134,103 +91,66 @@ export function submitWord(
   }
 
   const points = word.length;
+  const player: KelimePlayer = game.players.get(userId) ?? {
+    userId,
+    username,
+    score: 0,
+  };
+  player.username = username;
   player.score += points;
+  game.players.set(userId, player);
   game.currentWord = word;
   game.usedWords.add(word);
 
-  if (player.score >= TARGET_SCORE) {
-    game.phase = "finished";
-    game.winner = player.userId;
-    return { ok: true, word, points, winner: player.userId };
-  }
-
-  game.currentPlayerIndex =
-    (game.currentPlayerIndex + 1) % game.players.length;
-
-  return {
-    ok: true,
-    word,
-    points,
-    nextPlayer: currentPlayer(game).username,
-  };
-}
-
-export function endGame(channelId: string): void {
-  games.delete(channelId);
+  return { ok: true, word, points, totalScore: player.score };
 }
 
 function scoreLines(game: KelimeGame): string {
-  return [...game.players]
-    .sort((a, b) => b.score - a.score)
-    .map(
-      (player, index) =>
-        `${index + 1}. <@${player.userId}> — **${player.score} puan**`,
-    )
-    .join("\n");
-}
+  const players = [...game.players.values()].sort((a, b) => b.score - a.score);
+  if (players.length === 0) return "Henüz puan alan yok.";
 
-export function buildLobbyEmbed(game: KelimeGame): {
-  embeds: [EmbedBuilder];
-  components: ActionRowBuilder<ButtonBuilder>[];
-} {
-  const embed = new EmbedBuilder()
-    .setTitle("🔤 Kelime Türetme Lobisi")
-    .setColor(0x3498db)
-    .setDescription(
-      "Sırayla kelime türetin. Oyun başladığında gösterilen kelimenin son harfiyle yeni bir Türkçe kelime yazın.\n\n" +
-        `🎯 **Hedef:** ${TARGET_SCORE} puan\n` +
-        "📚 Kelimeler yerleşik Türkçe kelime listesinden doğrulanır.\n" +
-        "👥 En az 2, en fazla 10 oyuncu.",
-    )
-    .addFields({
-      name: `👥 Oyuncular (${game.players.length}/${MAX_PLAYERS})`,
-      value:
-        game.players.map((player) => `• ${player.username}`).join("\n") ||
-        "Henüz kimse yok.",
-    })
-    .setFooter({ text: "Kahvehane #80 • Kelime Türetme" });
-
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId("kelime:join")
-      .setLabel("Katıl")
-      .setEmoji("🙋")
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId("kelime:start")
-      .setLabel("Başlat")
-      .setEmoji("▶️")
-      .setStyle(ButtonStyle.Primary),
+  const visiblePlayers = players.slice(0, 20);
+  const lines = visiblePlayers.map(
+    (player, index) =>
+      `${index + 1}. <@${player.userId}> — **${player.score} puan**`,
   );
-
-  return { embeds: [embed], components: [row] };
+  if (players.length > visiblePlayers.length) {
+    lines.push(`... ve **${players.length - visiblePlayers.length}** oyuncu daha.`);
+  }
+  return lines.join("\n");
 }
 
 export function buildGameEmbed(game: KelimeGame): {
   embeds: [EmbedBuilder];
   components: ActionRowBuilder<ButtonBuilder>[];
 } {
-  const player = currentPlayer(game);
   const requiredLetter = game.currentWord.at(-1)?.toLocaleUpperCase("tr-TR");
-
   const embed = new EmbedBuilder()
-    .setTitle("🔤 Kelime Türetme")
+    .setTitle("🔤 Türkçe Kelime Türetme")
     .setColor(0x2ecc71)
     .setDescription(
       `Son kelime: **${game.currentWord}**\n\n` +
         `Sıradaki kelime **${requiredLetter}** harfiyle başlamalı.\n` +
-        `Sıra: <@${player.userId}>`,
+        "Katılmak için butona basıp kelimeni gönder. Oyuncu sayısında sınır yoktur.",
     )
     .addFields(
+      {
+        name: `👥 Oyuncular (${game.players.size})`,
+        value: "Bu kanaldaki herkes oynayabilir.",
+      },
       { name: "🏆 Puan Durumu", value: scoreLines(game) },
       {
         name: "📖 Kurallar",
         value:
-          "• Yalnızca Türkçe kelimeler\n• Aynı kelime tekrar kullanılamaz\n• Kelime en az 3 harfli olmalı\n• Her harf 1 puan",
+          "• Yalnızca Türkçe kelimeler\n" +
+          "• Kelime son kelimenin son harfiyle başlamalı\n" +
+          "• Aynı kelime tekrar kullanılamaz\n" +
+          "• Kelime en az 3 harfli olmalı\n" +
+          "• Her harf 1 puan",
       },
     )
     .setFooter({
-      text: `Hedef: ${TARGET_SCORE} puan • Kullanılan kelime: ${game.usedWords.size}`,
+      text: `Kullanılan kelime: ${game.usedWords.size} • Sınırsız oyuncu`,
     });
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -242,22 +162,4 @@ export function buildGameEmbed(game: KelimeGame): {
   );
 
   return { embeds: [embed], components: [row] };
-}
-
-export function buildFinishedEmbed(game: KelimeGame): {
-  embeds: [EmbedBuilder];
-  components: [];
-} {
-  const winner = game.players.find((player) => player.userId === game.winner);
-  const embed = new EmbedBuilder()
-    .setTitle("🎉 Kelime Türetme Bitti!")
-    .setColor(0xf1c40f)
-    .setDescription(
-      `🏆 Kazanan: <@${winner?.userId}> (**${winner?.score ?? 0} puan**)\n\n` +
-        "Tüm oyuncuların puanları:",
-    )
-    .addFields({ name: "📊 Sonuçlar", value: scoreLines(game) })
-    .setFooter({ text: "Yeni oyun için /kelime komutunu kullanın." });
-
-  return { embeds: [embed], components: [] };
 }

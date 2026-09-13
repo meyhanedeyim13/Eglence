@@ -1,5 +1,6 @@
 import {
   Client,
+  ChannelType,
   GatewayIntentBits,
   Partials,
   REST,
@@ -49,13 +50,29 @@ export async function registerCommands(clientId: string, token: string) {
 
     new SlashCommandBuilder()
       .setName("kelime")
-      .setDescription("Bu kanalda Türkçe Kelime Türetme oyunu başlat")
+      .setDescription("Bu kanalda Türkçe Kelime Türetme durumunu göster")
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName("kelime-kur")
+      .setDescription("Yöneticinin kelime oyun kanalını belirlemesi")
+      .addChannelOption((opt) =>
+        opt
+          .setName("kanal")
+          .setDescription("Kelime oyununun oynanacağı yazı kanalı")
+          .addChannelTypes(ChannelType.GuildText)
+          .setRequired(true),
+      )
       .toJSON(),
   ];
 
   const rest = new REST().setToken(token);
   logger.info("Slash komutları kaydediliyor...");
-  await rest.put(Routes.applicationCommands(clientId), { body: commands });
+  const guildId = process.env["DISCORD_GUILD_ID"];
+  const commandRoute = guildId
+    ? Routes.applicationGuildCommands(clientId, guildId)
+    : Routes.applicationCommands(clientId);
+  await rest.put(commandRoute, { body: commands });
   logger.info("Slash komutları başarıyla kaydedildi.");
 }
 
